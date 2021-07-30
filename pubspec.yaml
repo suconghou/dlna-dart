@@ -1,8 +1,8 @@
 name: dlna_dart
 description: simple dlna client
 version: 0.0.1
-repository: https://github.com/suconghou/dlan-dart
-homepage: https://github.com/suconghou/dlan-dart
+repository: https://github.com/suconghou/dlna-dart
+homepage: https://github.com/suconghou/dlna-dart
 publish_to: https://pub.dev
 environment:
   sdk: '>=2.13.0 <3.0.0'
