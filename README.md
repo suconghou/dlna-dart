@@ -1,12 +1,12 @@
 # dlna_dart
 
-simple dlan client
+simple dlna client
 
 ## Getting Started
 
 ```dart
 import 'dart:async';
-import 'package:dlan_dart/dlna.dart';
+import 'package:dlna_dart/dlna.dart';
 
 main(List<String> args) async {
   final m = await search().start();
