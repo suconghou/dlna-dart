@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:convert';
 import 'xmlParser.dart';
 
@@ -265,11 +266,6 @@ class manager {
 class search {
   static const String UPNP_IP_V4 = '239.255.255.250';
   static const int UPNP_PORT = 1900;
-  static const String DLNA_M_SEARCH = 'M-SEARCH * HTTP/1.1\r\n' +
-      'ST: ssdp:all\r\n' +
-      'HOST: 239.255.255.250:1900\r\n' +
-      'MX: 3\r\n' +
-      'MAN: \"ssdp:discover\"\r\n\r\n';
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
   Timer sender = Timer(Duration(seconds: 2), () {});
   Timer receiver = Timer(Duration(seconds: 2), () {});
@@ -280,8 +276,22 @@ class search {
     final socket =
         await RawDatagramSocket.bind(InternetAddress.anyIPv4, UPNP_PORT);
     socket.joinMulticast(UPNP_AddressIPv4);
+    final r = Random();
     sender = Timer.periodic(Duration(seconds: 5), (Timer t) {
-      String msg = DLNA_M_SEARCH;
+      final n = r.nextDouble();
+      var st = "ssdp:all";
+      if (n > 0.3) {
+        if (n > 0.6) {
+          st = "urn:schemas-upnp-org:service:AVTransport:1";
+        } else {
+          st = "urn:schemas-upnp-org:device:MediaRenderer:1";
+        }
+      }
+      String msg = 'M-SEARCH * HTTP/1.1\r\n' +
+          'ST: $st\r\n' +
+          'HOST: 239.255.255.250:1900\r\n' +
+          'MX: 3\r\n' +
+          'MAN: \"ssdp:discover\"\r\n\r\n';
       socket.send(msg.codeUnits, UPNP_AddressIPv4, UPNP_PORT);
     });
     receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
