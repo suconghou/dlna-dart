@@ -67,7 +67,7 @@ class device {
 
   Future<String> stop() {
     final data = XmlText.stopActionXml();
-    return request('Pause', Utf8Encoder().convert(data));
+    return request('Stop', Utf8Encoder().convert(data));
   }
 
   Future<String> seek(String sk) {
@@ -93,12 +93,12 @@ class XmlText {
     final douyu = RegExp(r'^https?://(\d+)\?douyu$');
     final isdouyu = douyu.firstMatch(url);
     if (isdouyu != null) {
-      final roomId = isdouyu.group(0);
+      final roomId = isdouyu.group(1);
       // 斗鱼tv的dlna server,只能指定直播间ID,不接受url资源,必须是如下格式
       title = "roomId = $roomId, line = 0";
     }
     var meta =
-        '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class></item></DIDL-Lite>''';
+        '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
     meta = htmlEncode(meta);
     url = htmlEncode(url);
     return '''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
@@ -199,7 +199,8 @@ class http {
     req.add(data);
     final res = await req.close().timeout(timeout);
     if (res.statusCode != HttpStatus.ok) {
-      throw Exception("request $uri error , status ${res.statusCode}");
+      final body = await res.transform(utf8.decoder).join().timeout(timeout);
+      throw Exception("request $uri error , status ${res.statusCode} $body");
     }
     final body = await res.transform(utf8.decoder).join().timeout(timeout);
     return body;
