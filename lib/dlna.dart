@@ -274,11 +274,13 @@ class search {
   Future<manager> start() async {
     stop();
     final m = manager();
-    final socket =
+    final socket_server =
         await RawDatagramSocket.bind(InternetAddress.anyIPv4, UPNP_PORT);
-    socket.joinMulticast(UPNP_AddressIPv4);
+    socket_server.joinMulticast(UPNP_AddressIPv4);
     final r = Random();
-    sender = Timer.periodic(Duration(seconds: 5), (Timer t) {
+    final socket_client =
+        await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    sender = Timer.periodic(Duration(seconds: 3), (Timer t) async {
       final n = r.nextDouble();
       var st = "ssdp:all";
       if (n > 0.3) {
@@ -293,14 +295,24 @@ class search {
           'HOST: 239.255.255.250:1900\r\n' +
           'MX: 3\r\n' +
           'MAN: \"ssdp:discover\"\r\n\r\n';
-      socket.send(msg.codeUnits, UPNP_AddressIPv4, UPNP_PORT);
+      socket_client.send(msg.codeUnits, UPNP_AddressIPv4, UPNP_PORT);
+      final replay = socket_client.receive();
+      if (replay == null) {
+        return;
+      }
+      try {
+        String message = String.fromCharCodes(replay.data).trim();
+        await m.onMessage(message);
+      } catch (e) {
+        print(e);
+      }
     });
     receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
-      final d = socket.receive();
+      final d = socket_server.receive();
       if (d == null) {
         return;
       }
-      String message = new String.fromCharCodes(d.data).trim();
+      String message = String.fromCharCodes(d.data).trim();
       // print('Datagram from ${d.address.address}:${d.port}: ${message}');
       try {
         await m.onMessage(message);
