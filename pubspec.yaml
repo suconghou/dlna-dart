@@ -7,4 +7,4 @@ publish_to: https://pub.dev
 environment:
   sdk: '>=2.13.0 <3.0.0'
 dependencies: 
-  xml: ^5.1.2
+  xml: ^5.2.0
