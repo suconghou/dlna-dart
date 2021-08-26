@@ -270,13 +270,14 @@ class search {
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
   Timer sender = Timer(Duration(seconds: 2), () {});
   Timer receiver = Timer(Duration(seconds: 2), () {});
-
-  Future<manager> start() async {
+  RawDatagramSocket? socket_server;
+  Future<manager> start({reusePort = false}) async {
     stop();
     final m = manager();
-    final socket_server =
-        await RawDatagramSocket.bind(InternetAddress.anyIPv4, UPNP_PORT);
-    socket_server.joinMulticast(UPNP_AddressIPv4);
+    socket_server = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4, UPNP_PORT,
+        reusePort: reusePort);
+    socket_server!.joinMulticast(UPNP_AddressIPv4);
     final r = Random();
     final socket_client =
         await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
@@ -308,7 +309,7 @@ class search {
       }
     });
     receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
-      final d = socket_server.receive();
+      final d = socket_server!.receive();
       if (d == null) {
         return;
       }
@@ -326,5 +327,8 @@ class search {
   stop() {
     sender.cancel();
     receiver.cancel();
+    socket_server?.leaveMulticast(UPNP_AddressIPv4);
+    socket_server?.close();
+    socket_server = null;
   }
 }
