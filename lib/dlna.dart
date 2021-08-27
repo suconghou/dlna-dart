@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'xmlParser.dart';
 
 String removeTrailing(String pattern, String from) {
@@ -277,7 +278,23 @@ class search {
     socket_server = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4, UPNP_PORT,
         reusePort: reusePort);
-    socket_server!.joinMulticast(UPNP_AddressIPv4);
+    // https://github.com/dart-lang/sdk/issues/42250 截止到 dart 2.13.4 仍存在问题,期待新版修复
+    // 修复IOS joinMulticast 的问题
+    if (Platform.isIOS) {
+      final List<NetworkInterface> interfaces = await NetworkInterface.list(
+        includeLinkLocal: false,
+        type: InternetAddress.anyIPv4.type,
+        includeLoopback: false,
+      );
+      for (final interface in interfaces) {
+        final value = Uint8List.fromList(
+            UPNP_AddressIPv4.rawAddress + interface.addresses[0].rawAddress);
+        socket_server!.setRawOption(
+            RawSocketOption(RawSocketOption.levelIPv4, 12, value));
+      }
+    } else {
+      socket_server!.joinMulticast(UPNP_AddressIPv4);
+    }
     final r = Random();
     final socket_client =
         await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
@@ -327,7 +344,6 @@ class search {
   stop() {
     sender.cancel();
     receiver.cancel();
-    socket_server?.leaveMulticast(UPNP_AddressIPv4);
     socket_server?.close();
     socket_server = null;
   }

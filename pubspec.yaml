@@ -1,6 +1,6 @@
 name: dlna_dart
 description: simple dlna client
-version: 0.0.3
+version: 0.0.4
 repository: https://github.com/suconghou/dlna-dart
 homepage: https://github.com/suconghou/dlna-dart
 publish_to: https://pub.dev
