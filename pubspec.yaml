@@ -3,7 +3,6 @@ description: simple dlna client in pure dart,works fine in flutter,do all the jo
 version: 0.0.5
 repository: https://github.com/suconghou/dlna-dart
 homepage: https://github.com/suconghou/dlna-dart
-publish_to: https://pub.dev
 environment:
   sdk: '>=2.15.1 <3.0.0'
 dependencies: 
