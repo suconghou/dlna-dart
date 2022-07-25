@@ -30,10 +30,10 @@ String htmlEncode(String text) {
   return text;
 }
 
-class device {
+class DLNADevice {
   final deviceInfo info;
 
-  device(this.info);
+  DLNADevice(this.info);
 
   String get controlURL {
     final base = removeTrailing("/", info.URLBase);
@@ -258,27 +258,27 @@ class parser {
   }
 }
 
-class manager {
-  final Map<String, device> deviceList = Map();
-  manager();
+class DeviceManager {
+  final Map<String, DLNADevice> deviceList = Map();
+  DeviceManager();
   onMessage(String message) async {
     final deviceInfo? info = await parser(message).parse();
     if (info != null) {
-      deviceList[info.URLBase] = device(info);
+      deviceList[info.URLBase] = DLNADevice(info);
     }
   }
 }
 
-class search {
+class DLNAManager {
   static const String UPNP_IP_V4 = '239.255.255.250';
   static const int UPNP_PORT = 1900;
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
   Timer sender = Timer(Duration(seconds: 2), () {});
   Timer receiver = Timer(Duration(seconds: 2), () {});
   RawDatagramSocket? socket_server;
-  Future<manager> start({reusePort = false}) async {
+  Future<DeviceManager> start({reusePort = false}) async {
     stop();
-    final m = manager();
+    final m = DeviceManager();
     socket_server = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4, UPNP_PORT,
         reusePort: reusePort);

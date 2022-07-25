@@ -2,7 +2,7 @@ import 'dart:async';
 import '../lib/dlna.dart';
 
 main(List<String> args) async {
-  final searcher = search();
+  final searcher = DLNAManager();
   final m = await searcher.start();
   Timer.periodic(Duration(seconds: 3), (timer) {
     m.deviceList.forEach((key, value) async {
