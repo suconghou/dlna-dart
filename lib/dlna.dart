@@ -32,13 +32,15 @@ String htmlEncode(String text) {
 
 class DLNADevice {
   final deviceInfo info;
+  final _rendering_control =
+      Set.from(['SetMute', 'GetMute', 'SetVolume', 'GetVolume']);
 
   DLNADevice(this.info);
 
-  String get controlURL {
+  String controlURL(String type) {
     final base = removeTrailing("/", info.URLBase);
     final s = info.serviceList
-        .firstWhere((element) => element['serviceId'].contains("AVTransport"));
+        .firstWhere((element) => element['serviceId'].contains(type));
     if (s != null) {
       final controlURL = trimLeading("/", s["controlURL"]);
       return base + '/' + controlURL;
@@ -48,11 +50,14 @@ class DLNADevice {
 
   Future<String> request(String action, List<int> data) {
     final controlURL = this.controlURL;
+    final soapAction = _rendering_control.contains(action)
+        ? 'RenderingControl'
+        : 'AVTransport';
     final Map<String, Object> headers = Map.from({
-      'SOAPAction': '"urn:schemas-upnp-org:service:AVTransport:1#$action"',
+      'SOAPAction': '"urn:schemas-upnp-org:service:$soapAction:1#$action"',
       'Content-Type': 'text/xml',
     });
-    return http.post(Uri.parse(controlURL), headers, data);
+    return http.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
   Future<String> setUrl(String url) {
@@ -89,6 +94,61 @@ class DLNADevice {
     final p = positionParser(text);
     final sk = p.seek(n);
     return seek(sk);
+  }
+
+  Future<String> getCurrentTransportActions() {
+    final data = XmlText.getCurrentTransportActionsXml();
+    return request('GetCurrentTransportActions', Utf8Encoder().convert(data));
+  }
+
+  Future<String> getMediaInfo() {
+    final data = XmlText.getMediaInfoXml();
+    return request('GetMediaInfo', Utf8Encoder().convert(data));
+  }
+
+  Future<String> getTransportInfo() {
+    final data = XmlText.getTransportInfoXml();
+    return request('GetTransportInfo', Utf8Encoder().convert(data));
+  }
+
+  Future<String> next() {
+    final data = XmlText.nextXml();
+    return request('Next', Utf8Encoder().convert(data));
+  }
+
+  Future<String> previous() {
+    final data = XmlText.previousXml();
+    return request('Previous', Utf8Encoder().convert(data));
+  }
+
+  Future<String> setPlayMode(String modeName) {
+    final data = XmlText.setPlayModeXml(modeName);
+    return request('SetPlayMode', Utf8Encoder().convert(data));
+  }
+
+  Future<String> getDeviceCapabilities() {
+    final data = XmlText.getDeviceCapabilitiesXml();
+    return request('GetDeviceCapabilities', Utf8Encoder().convert(data));
+  }
+
+  Future<String> mute(bool mute) {
+    final data = XmlText.muteXml(mute);
+    return request('SetMute', Utf8Encoder().convert(data));
+  }
+
+  Future<String> getMute() {
+    final data = XmlText.muteStateXml();
+    return request('GetMute', Utf8Encoder().convert(data));
+  }
+
+  Future<String> volume(int volume) {
+    final data = XmlText.volumeXml(volume);
+    return request('SetVolume', Utf8Encoder().convert(data));
+  }
+
+  Future<String> getVolume() {
+    final data = XmlText.volumeStateXml();
+    return request('GetVolume', Utf8Encoder().convert(data));
   }
 }
 
@@ -174,6 +234,135 @@ class XmlText {
 			<Unit>REL_TIME</Unit>
 			<Target>$sk</Target>
 		</u:Seek>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String getCurrentTransportActionsXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetCurrentTransportActions xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:GetCurrentTransportActions>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String getMediaInfoXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetMediaInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:GetMediaInfo>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String getTransportInfoXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetTransportInfo xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:GetTransportInfo>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String nextXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:Next xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:Next>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String previousXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:Previous xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:Previous>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String setPlayModeXml(String modeName) {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:SetPlayMode xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+			<NewPlayMode>$modeName</NewPlayMode>
+		</u:SetPlayMode>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String getDeviceCapabilitiesXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetDeviceCapabilities xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
+			<InstanceID>0</InstanceID>
+		</u:GetDeviceCapabilities>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String muteXml(bool mute) {
+    final value = mute ? '1' : '0';
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:SetMute xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">
+			<InstanceID>0</InstanceID>
+			<Channel>Master</Channel>
+			<DesiredMute>$value</DesiredMute>
+		</u:SetMute>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String muteStateXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetMute xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">
+			<InstanceID>0</InstanceID>
+			<Channel>Master</Channel>
+		</u:GetMute>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String volumeXml(int volume) {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:SetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">
+			<InstanceID>0</InstanceID>
+			<Channel>Master</Channel>
+			<DesiredVolume>$volume</DesiredVolume>
+		</u:SetVolume>
+	</s:Body>
+</s:Envelope>''';
+  }
+
+  static String volumeStateXml() {
+    return '''<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<s:Envelope s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/" xmlns:s="http://schemas.xmlsoap.org/soap/envelope/">
+	<s:Body>
+		<u:GetVolume xmlns:u="urn:schemas-upnp-org:service:RenderingControl:1">
+			<InstanceID>0</InstanceID>
+			<Channel>Master</Channel>
+		</u:GetVolume>
 	</s:Body>
 </s:Envelope>''';
   }
