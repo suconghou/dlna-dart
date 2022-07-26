@@ -10,13 +10,21 @@ class deviceInfo {
       this.URLBase, this.deviceType, this.friendlyName, this.serviceList);
 }
 
-class positionParser {
-  String TrackDuration = "00:00:00";
+class PositionParser {
+  String TrackDuration = "00:00:00"; // 总时长
   String TrackURI = "";
-  String RelTime = "00:00:00";
+  String RelTime = "00:00:00"; // 当前播放时间点
   String AbsTime = "00:00:00";
 
-  positionParser(String text) {
+  int get TrackDurationInt {
+    return toInt(TrackDuration);
+  }
+
+  int get RelTimeInt {
+    return toInt(RelTime);
+  }
+
+  PositionParser(String text) {
     var doc = XmlDocument.parse(text);
     TrackDuration = doc.findAllElements('TrackDuration').first.text;
     TrackURI = doc.findAllElements('TrackURI').first.text;
@@ -25,8 +33,8 @@ class positionParser {
   }
 
   String seek(int n) {
-    final total = toInt(TrackDuration);
-    var x = toInt(RelTime) + n;
+    final total = TrackDurationInt;
+    var x = RelTimeInt + n;
     if (x > total) {
       x = total;
     } else if (x < 0) {

@@ -91,7 +91,7 @@ class DLNADevice {
   }
 
   Future<String> seekByCurrent(String text, int n) {
-    final p = positionParser(text);
+    final p = PositionParser(text);
     final sk = p.seek(n);
     return seek(sk);
   }
