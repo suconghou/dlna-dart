@@ -1,12 +1,12 @@
 import 'package:xml/xml.dart';
 import 'dart:math';
 
-class deviceInfo {
+class DeviceInfo {
   final String URLBase;
   final String deviceType;
   final String friendlyName;
   final List<dynamic> serviceList;
-  deviceInfo(
+  DeviceInfo(
       this.URLBase, this.deviceType, this.friendlyName, this.serviceList);
 }
 
@@ -25,7 +25,7 @@ class PositionParser {
   }
 
   PositionParser(String text) {
-    var doc = XmlDocument.parse(text);
+    final doc = XmlDocument.parse(text);
     TrackDuration = doc.findAllElements('TrackDuration').first.text;
     TrackURI = doc.findAllElements('TrackURI').first.text;
     RelTime = doc.findAllElements('RelTime').first.text;
@@ -68,11 +68,60 @@ class PositionParser {
   }
 }
 
-class xmlParser {
+class VolumeParser {
+  int current = 0;
+  VolumeParser(String text) {
+    final doc = XmlDocument.parse(text);
+    String v = doc.findAllElements('CurrentVolume').first.text;
+    current = int.parse(v);
+  }
+
+  int change(int v) {
+    int target = current + v;
+    if (target > 100) {
+      target = 100;
+    }
+    if (target < 0) {
+      target = 0;
+    }
+    return target;
+  }
+}
+
+class TransportInfoParser {
+  String CurrentTransportState = '';
+  String CurrentTransportStatus = '';
+  TransportInfoParser(String text) {
+    final doc = XmlDocument.parse(text);
+    CurrentTransportState =
+        doc.findAllElements('CurrentTransportState').first.text;
+    CurrentTransportStatus =
+        doc.findAllElements('CurrentTransportStatus').first.text;
+  }
+}
+
+class MediaInfoParser {
+  String MediaDuration = '00:00';
+  String CurrentURI = '';
+  String NextURI = '';
+
+  int get MediaDurationInt {
+    return PositionParser.toInt(MediaDuration);
+  }
+
+  MediaInfoParser(String text) {
+    final doc = XmlDocument.parse(text);
+    MediaDuration = doc.findAllElements('MediaDuration').first.text;
+    CurrentURI = doc.findAllElements('CurrentURI').first.text;
+    NextURI = doc.findAllElements('NextURI').first.text;
+  }
+}
+
+class DeviceInfoParser {
   final String text;
   final XmlDocument doc;
-  xmlParser(this.text) : doc = XmlDocument.parse(text);
-  deviceInfo parse(Uri uri) {
+  DeviceInfoParser(this.text) : doc = XmlDocument.parse(text);
+  DeviceInfo parse(Uri uri) {
     String URLBase = "";
     try {
       URLBase = doc.findAllElements('URLBase').first.text;
@@ -94,6 +143,6 @@ class xmlParser {
         "controlURL": controlURL,
       });
     }
-    return deviceInfo(URLBase, deviceType, friendlyName, serviceListItems);
+    return DeviceInfo(URLBase, deviceType, friendlyName, serviceListItems);
   }
 }

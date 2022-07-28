@@ -31,7 +31,7 @@ String htmlEncode(String text) {
 }
 
 class DLNADevice {
-  final deviceInfo info;
+  final DeviceInfo info;
   final _rendering_control =
       Set.from(['SetMute', 'GetMute', 'SetVolume', 'GetVolume']);
 
@@ -57,7 +57,7 @@ class DLNADevice {
       'SOAPAction': '"urn:schemas-upnp-org:service:$soapAction:1#$action"',
       'Content-Type': 'text/xml',
     });
-    return http.post(Uri.parse(controlURL(soapAction)), headers, data);
+    return DlnaHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
   Future<String> setUrl(String url) {
@@ -149,6 +149,11 @@ class DLNADevice {
   Future<String> getVolume() {
     final data = XmlText.volumeStateXml();
     return request('GetVolume', Utf8Encoder().convert(data));
+  }
+
+  Future<String> changeVolume(int value) async {
+    final v = VolumeParser(await getVolume()).change(value);
+    return await volume(v);
   }
 }
 
@@ -368,7 +373,7 @@ class XmlText {
   }
 }
 
-class http {
+class DlnaHttp {
   static final client = HttpClient();
 
   static Future<String> get(Uri uri) async {
@@ -401,9 +406,9 @@ class http {
   }
 }
 
-class parser {
+class _upnp_msg_parser {
   final String message;
-  parser(this.message);
+  _upnp_msg_parser(this.message);
   parse() async {
     final lines = message.split('\n');
     final arr = lines.first.split(' ');
@@ -439,10 +444,10 @@ class parser {
     }
   }
 
-  Future<deviceInfo> getInfo(String uri) async {
+  Future<DeviceInfo> getInfo(String uri) async {
     final target = Uri.parse(uri);
-    final body = await http.get(target);
-    final info = xmlParser(body).parse(target);
+    final body = await DlnaHttp.get(target);
+    final info = DeviceInfoParser(body).parse(target);
     return info;
   }
 }
@@ -451,7 +456,7 @@ class DeviceManager {
   final Map<String, DLNADevice> deviceList = Map();
   DeviceManager();
   onMessage(String message) async {
-    final deviceInfo? info = await parser(message).parse();
+    final DeviceInfo? info = await _upnp_msg_parser(message).parse();
     if (info != null) {
       deviceList[info.URLBase] = DLNADevice(info);
     }
