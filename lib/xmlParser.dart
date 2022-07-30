@@ -25,6 +25,9 @@ class PositionParser {
   }
 
   PositionParser(String text) {
+    if (text.isEmpty) {
+      return;
+    }
     final doc = XmlDocument.parse(text);
     TrackDuration = doc.findAllElements('TrackDuration').first.text;
     TrackURI = doc.findAllElements('TrackURI').first.text;
