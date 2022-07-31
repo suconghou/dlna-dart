@@ -9,10 +9,10 @@ import 'dart:async';
 import 'package:dlna_dart/dlna.dart';
 
 main(List<String> args) async {
-  final searcher = search();
+  final searcher = DLNAManager();
   final m = await searcher.start();
-  Timer.periodic(Duration(seconds: 3), (timer) {
-    m.deviceList.forEach((key, value) async {
+  m.devices.stream.listen((deviceList) {
+    deviceList.forEach((key, value) async {
       print(key);
       if (value.info.friendlyName.contains('Wireless')) return;
       print(value.info.friendlyName);
@@ -29,7 +29,6 @@ main(List<String> args) async {
   });
 
   // if you new search() many times , you must use start(reusePort:true)
-
 }
 
 

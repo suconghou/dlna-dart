@@ -377,7 +377,7 @@ class DlnaHttp {
   static final client = HttpClient();
 
   static Future<String> get(Uri uri) async {
-    const timeout = Duration(seconds: 5);
+    const timeout = Duration(seconds: 15);
     final req = await client.getUrl(uri);
     final res = await req.close().timeout(timeout);
     if (res.statusCode != HttpStatus.ok) {
@@ -389,7 +389,7 @@ class DlnaHttp {
 
   static Future<String> post(
       Uri uri, Map<String, Object> headers, List<int> data) async {
-    const timeout = Duration(seconds: 5);
+    const timeout = Duration(seconds: 15);
     final req = await client.postUrl(uri);
     headers.forEach((name, values) {
       req.headers.set(name, values);
@@ -453,12 +453,22 @@ class _upnp_msg_parser {
 }
 
 class DeviceManager {
+  var t = DateTime.now();
   final Map<String, DLNADevice> deviceList = Map();
+  final StreamController<Map<String, DLNADevice>> devices = StreamController();
   DeviceManager();
   onMessage(String message) async {
     final DeviceInfo? info = await _upnp_msg_parser(message).parse();
     if (info != null) {
+      final newFound = !deviceList.containsKey(info.URLBase);
       deviceList[info.URLBase] = DLNADevice(info);
+      final now = DateTime.now();
+      if (newFound || now.difference(t).inSeconds.abs() > 5) {
+        if (!devices.isClosed) {
+          devices.add(deviceList);
+          t = now;
+        }
+      }
     }
   }
 }
@@ -467,13 +477,16 @@ class DLNAManager {
   static const String UPNP_IP_V4 = '239.255.255.250';
   static const int UPNP_PORT = 1900;
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
-  Timer sender = Timer(Duration(seconds: 2), () {});
-  Timer receiver = Timer(Duration(seconds: 2), () {});
-  RawDatagramSocket? socket_server;
+  Timer _sender = Timer(Duration(seconds: 2), () {});
+  Timer _receiver = Timer(Duration(seconds: 2), () {});
+  RawDatagramSocket? _socket_server;
+  DeviceManager? _deviceManager = DeviceManager();
   Future<DeviceManager> start({reusePort = false}) async {
     stop();
-    final m = DeviceManager();
-    socket_server = await RawDatagramSocket.bind(
+    _deviceManager?.devices.close();
+    final dm = DeviceManager();
+    _deviceManager = dm;
+    _socket_server = await RawDatagramSocket.bind(
         InternetAddress.anyIPv4, UPNP_PORT,
         reusePort: reusePort);
     // https://github.com/dart-lang/sdk/issues/42250 截止到 dart 2.13.4 仍存在问题,期待新版修复
@@ -487,16 +500,16 @@ class DLNAManager {
       for (final interface in interfaces) {
         final value = Uint8List.fromList(
             UPNP_AddressIPv4.rawAddress + interface.addresses[0].rawAddress);
-        socket_server!.setRawOption(
+        _socket_server!.setRawOption(
             RawSocketOption(RawSocketOption.levelIPv4, 12, value));
       }
     } else {
-      socket_server!.joinMulticast(UPNP_AddressIPv4);
+      _socket_server!.joinMulticast(UPNP_AddressIPv4);
     }
     final r = Random();
     final socket_client =
         await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
-    sender = Timer.periodic(Duration(seconds: 3), (Timer t) async {
+    _sender = Timer.periodic(Duration(seconds: 3), (Timer t) async {
       final n = r.nextDouble();
       var st = "ssdp:all";
       if (n > 0.3) {
@@ -518,31 +531,32 @@ class DLNAManager {
       }
       try {
         String message = String.fromCharCodes(replay.data).trim();
-        await m.onMessage(message);
+        await dm.onMessage(message);
       } catch (e) {
         print(e);
       }
     });
-    receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
-      final d = socket_server!.receive();
+    _receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
+      final d = _socket_server!.receive();
       if (d == null) {
         return;
       }
       String message = String.fromCharCodes(d.data).trim();
       // print('Datagram from ${d.address.address}:${d.port}: ${message}');
       try {
-        await m.onMessage(message);
+        await dm.onMessage(message);
       } catch (e) {
         print(e);
       }
     });
-    return m;
+    return dm;
   }
 
   stop() {
-    sender.cancel();
-    receiver.cancel();
-    socket_server?.close();
-    socket_server = null;
+    _sender.cancel();
+    _receiver.cancel();
+    _socket_server?.close();
+    _socket_server = null;
+    _deviceManager?.devices.close();
   }
 }
