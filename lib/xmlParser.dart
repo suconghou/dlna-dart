@@ -29,10 +29,19 @@ class PositionParser {
       return;
     }
     final doc = XmlDocument.parse(text);
-    TrackDuration = doc.findAllElements('TrackDuration').first.text;
+    final duration = doc.findAllElements('TrackDuration').first.text;
+    final rel = doc.findAllElements('RelTime').first.text;
+    final abs = doc.findAllElements('AbsTime').first.text;
+    if (duration.isNotEmpty) {
+      TrackDuration = duration;
+    }
+    if (rel.isNotEmpty) {
+      RelTime = rel;
+    }
+    if (abs.isNotEmpty) {
+      AbsTime = abs;
+    }
     TrackURI = doc.findAllElements('TrackURI').first.text;
-    RelTime = doc.findAllElements('RelTime').first.text;
-    AbsTime = doc.findAllElements('AbsTime').first.text;
   }
 
   String seek(int n) {

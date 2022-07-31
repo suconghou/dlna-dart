@@ -49,7 +49,6 @@ class DLNADevice {
   }
 
   Future<String> request(String action, List<int> data) {
-    final controlURL = this.controlURL;
     final soapAction = _rendering_control.contains(action)
         ? 'RenderingControl'
         : 'AVTransport';
@@ -374,35 +373,43 @@ class XmlText {
 }
 
 class DlnaHttp {
-  static final client = HttpClient();
-
   static Future<String> get(Uri uri) async {
-    const timeout = Duration(seconds: 15);
-    final req = await client.getUrl(uri);
-    final res = await req.close().timeout(timeout);
-    if (res.statusCode != HttpStatus.ok) {
-      throw Exception("request $uri error , status ${res.statusCode}");
+    final client = HttpClient();
+    try {
+      const timeout = Duration(seconds: 15);
+      final req = await client.getUrl(uri);
+      final res = await req.close().timeout(timeout);
+      if (res.statusCode != HttpStatus.ok) {
+        throw Exception("request $uri error , status ${res.statusCode}");
+      }
+      final body = await res.transform(utf8.decoder).join().timeout(timeout);
+      return body;
+    } finally {
+      client.close();
     }
-    final body = await res.transform(utf8.decoder).join().timeout(timeout);
-    return body;
   }
 
   static Future<String> post(
       Uri uri, Map<String, Object> headers, List<int> data) async {
-    const timeout = Duration(seconds: 15);
-    final req = await client.postUrl(uri);
-    headers.forEach((name, values) {
-      req.headers.set(name, values);
-    });
-    req.contentLength = data.length;
-    req.add(data);
-    final res = await req.close().timeout(timeout);
-    if (res.statusCode != HttpStatus.ok) {
+    final client = HttpClient();
+    try {
+      const timeout = Duration(seconds: 15);
+      final req = await client.postUrl(uri);
+      headers.forEach((name, values) {
+        req.headers.set(name, values);
+      });
+      req.contentLength = data.length;
+      req.add(data);
+      final res = await req.close().timeout(timeout);
+      if (res.statusCode != HttpStatus.ok) {
+        final body = await res.transform(utf8.decoder).join().timeout(timeout);
+        throw Exception("request $uri error , status ${res.statusCode} $body");
+      }
       final body = await res.transform(utf8.decoder).join().timeout(timeout);
-      throw Exception("request $uri error , status ${res.statusCode} $body");
+      return body;
+    } finally {
+      client.close();
     }
-    final body = await res.transform(utf8.decoder).join().timeout(timeout);
-    return body;
   }
 }
 
