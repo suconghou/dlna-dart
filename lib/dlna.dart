@@ -56,7 +56,7 @@ class DLNADevice {
       'SOAPAction': '"urn:schemas-upnp-org:service:$soapAction:1#$action"',
       'Content-Type': 'text/xml',
     });
-    return DlnaHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
+    return DLNAHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
   Future<String> setUrl(String url) {
@@ -372,7 +372,7 @@ class XmlText {
   }
 }
 
-class DlnaHttp {
+class DLNAHttp {
   static Future<String> get(Uri uri) async {
     final client = HttpClient();
     try {
@@ -453,7 +453,7 @@ class _upnp_msg_parser {
 
   Future<DeviceInfo> getInfo(String uri) async {
     final target = Uri.parse(uri);
-    final body = await DlnaHttp.get(target);
+    final body = await DLNAHttp.get(target);
     final info = DeviceInfoParser(body).parse(target);
     return info;
   }
