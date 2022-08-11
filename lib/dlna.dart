@@ -59,8 +59,8 @@ class DLNADevice {
     return DLNAHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
-  Future<String> setUrl(String url) {
-    final data = XmlText.setPlayURLXml(url);
+  Future<String> setUrl(String url, {String title = ""}) {
+    final data = XmlText.setPlayURLXml(url, title: title);
     return request('SetAVTransportURI', Utf8Encoder().convert(data));
   }
 
