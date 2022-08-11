@@ -157,14 +157,15 @@ class DLNADevice {
 }
 
 class XmlText {
-  static String setPlayURLXml(String url) {
-    var title = url;
+  static String setPlayURLXml(String url, {String title = ""}) {
     final douyu = RegExp(r'^https?://(\d+)\?douyu$');
     final isdouyu = douyu.firstMatch(url);
     if (isdouyu != null) {
       final roomId = isdouyu.group(1);
       // 斗鱼tv的dlna server,只能指定直播间ID,不接受url资源,必须是如下格式
       title = "roomId = $roomId, line = 0";
+    } else if (title.isEmpty) {
+      title = url;
     }
     var meta =
         '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
