@@ -59,8 +59,13 @@ class DLNADevice {
     return DLNAHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
-  Future<String> setUrl(String url, {String title = ""}) {
-    final data = XmlText.setPlayURLXml(url, title: title);
+  Future<String> setUrl(String url,
+      {String title = "", PlayType type = PlayType.Video}) {
+    final data = XmlText.setPlayURLXml(
+      url,
+      title: title,
+      type: type,
+    );
     return request('SetAVTransportURI', Utf8Encoder().convert(data));
   }
 
@@ -157,7 +162,8 @@ class DLNADevice {
 }
 
 class XmlText {
-  static String setPlayURLXml(String url, {String title = ""}) {
+  static String setPlayURLXml(String url,
+      {String title = "", required PlayType type}) {
     final douyu = RegExp(r'^https?://(\d+)\?douyu$');
     final isdouyu = douyu.firstMatch(url);
     if (isdouyu != null) {
@@ -167,8 +173,18 @@ class XmlText {
     } else if (title.isEmpty) {
       title = url;
     }
-    var meta =
-        '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
+    var meta = '';
+    if (type == PlayType.Video) {
+      meta =
+          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
+    } else if (type == PlayType.Image) {
+      meta =
+          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.imageItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
+    } else if (type == PlayType.Audio) {
+      meta =
+          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.audioItem.musicTrack</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
+    }
+
     meta = htmlEncode(meta);
     url = htmlEncode(url);
     return '''<?xml version="1.0" encoding="utf-8" standalone="yes"?>

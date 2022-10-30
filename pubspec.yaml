@@ -1,6 +1,6 @@
 name: dlna_dart
 description: simple dlna client in pure dart,works fine in flutter,do all the job less than 500 lines
-version: 0.0.7
+version: 0.0.8
 repository: https://github.com/suconghou/dlna-dart
 homepage: https://github.com/suconghou/dlna-dart
 environment:

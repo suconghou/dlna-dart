@@ -1,6 +1,12 @@
 import 'package:xml/xml.dart';
 import 'dart:math';
 
+enum PlayType {
+  Video,
+  Image,
+  Audio,
+}
+
 class DeviceInfo {
   final String URLBase;
   final String deviceType;

@@ -5,4 +5,5 @@
 ## [0.0.5] - update dependencies
 ## [0.0.6] - enhance class name , add more dlna method
 ## [0.0.7] - add title param in set play url
+## [0.0.8] - add play type param in set play url
 
