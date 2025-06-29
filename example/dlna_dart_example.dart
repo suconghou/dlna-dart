@@ -9,6 +9,8 @@ main(List<String> args) async {
       print(key);
       if (value.info.friendlyName.contains('Wireless')) return;
       print(value.info.friendlyName);
+      print(value.activeTime);
+      print('\r\n');
       // final text = await value.position();
       // final r = await value.seekByCurrent(text, 10);
       // print(r);

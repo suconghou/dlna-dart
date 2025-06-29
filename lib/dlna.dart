@@ -22,8 +22,13 @@ String trimLeading(String pattern, String from) {
 }
 
 String htmlEncode(String text) {
-  Map<String, String> mapping = Map.from(
-      {"&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': '&quot;'});
+  Map<String, String> mapping = Map.from({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': '&quot;',
+  });
   mapping.forEach((key, value) {
     text = text.replaceAll(key, value);
   });
@@ -32,15 +37,25 @@ String htmlEncode(String text) {
 
 class DLNADevice {
   final DeviceInfo info;
-  final _rendering_control =
-      Set.from(['SetMute', 'GetMute', 'SetVolume', 'GetVolume']);
+  final _rendering_control = Set.from([
+    'SetMute',
+    'GetMute',
+    'SetVolume',
+    'GetVolume',
+  ]);
+  DateTime activeTime = DateTime.now();
 
   DLNADevice(this.info);
 
+  void updateActive(DateTime t) {
+    activeTime = t;
+  }
+
   String controlURL(String type) {
     final base = removeTrailing("/", info.URLBase);
-    final s = info.serviceList
-        .firstWhere((element) => element['serviceId'].contains(type));
+    final s = info.serviceList.firstWhere(
+      (element) => element['serviceId'].contains(type),
+    );
     if (s != null) {
       final controlURL = trimLeading("/", s["controlURL"]);
       return base + '/' + controlURL;
@@ -59,13 +74,12 @@ class DLNADevice {
     return DLNAHttp.post(Uri.parse(controlURL(soapAction)), headers, data);
   }
 
-  Future<String> setUrl(String url,
-      {String title = "", PlayType type = PlayType.Video}) {
-    final data = XmlText.setPlayURLXml(
-      url,
-      title: title,
-      type: type,
-    );
+  Future<String> setUrl(
+    String url, {
+    String title = "",
+    PlayType type = PlayType.Video,
+  }) {
+    final data = XmlText.setPlayURLXml(url, title: title, type: type);
     return request('SetAVTransportURI', Utf8Encoder().convert(data));
   }
 
@@ -162,8 +176,11 @@ class DLNADevice {
 }
 
 class XmlText {
-  static String setPlayURLXml(String url,
-      {String title = "", required PlayType type}) {
+  static String setPlayURLXml(
+    String url, {
+    String title = "",
+    required PlayType type,
+  }) {
     final douyu = RegExp(r'^https?://(\d+)\?douyu$');
     final isdouyu = douyu.firstMatch(url);
     if (isdouyu != null) {
@@ -407,7 +424,10 @@ class DLNAHttp {
   }
 
   static Future<String> post(
-      Uri uri, Map<String, Object> headers, List<int> data) async {
+    Uri uri,
+    Map<String, Object> headers,
+    List<int> data,
+  ) async {
     final client = HttpClient();
     try {
       const timeout = Duration(seconds: 15);
@@ -483,15 +503,21 @@ class DeviceManager {
   DeviceManager();
   onMessage(String message) async {
     final DeviceInfo? info = await _upnp_msg_parser(message).parse();
-    if (info != null) {
-      final newFound = !deviceList.containsKey(info.URLBase);
+    if (info == null) {
+      return;
+    }
+    final now = DateTime.now();
+    final device = deviceList[info.URLBase];
+    if (device != null) {
+      device.updateActive(now);
+    } else {
       deviceList[info.URLBase] = DLNADevice(info);
-      final now = DateTime.now();
-      if (newFound || now.difference(t).inSeconds.abs() > 5) {
-        if (!devices.isClosed) {
-          devices.add(deviceList);
-          t = now;
-        }
+    }
+    final newFound = device == null;
+    if (newFound || now.difference(t).inSeconds.abs() > 5) {
+      if (!devices.isClosed) {
+        devices.add(deviceList);
+        t = now;
       }
     }
   }
@@ -511,8 +537,10 @@ class DLNAManager {
     final dm = DeviceManager();
     _deviceManager = dm;
     _socket_server = await RawDatagramSocket.bind(
-        InternetAddress.anyIPv4, UPNP_PORT,
-        reusePort: reusePort);
+      InternetAddress.anyIPv4,
+      UPNP_PORT,
+      reusePort: reusePort,
+    );
     // https://github.com/dart-lang/sdk/issues/42250 截止到 dart 2.13.4 仍存在问题,期待新版修复
     // 修复IOS joinMulticast 的问题
     if (Platform.isIOS) {
@@ -523,16 +551,20 @@ class DLNAManager {
       );
       for (final interface in interfaces) {
         final value = Uint8List.fromList(
-            UPNP_AddressIPv4.rawAddress + interface.addresses[0].rawAddress);
+          UPNP_AddressIPv4.rawAddress + interface.addresses[0].rawAddress,
+        );
         _socket_server!.setRawOption(
-            RawSocketOption(RawSocketOption.levelIPv4, 12, value));
+          RawSocketOption(RawSocketOption.levelIPv4, 12, value),
+        );
       }
     } else {
       _socket_server!.joinMulticast(UPNP_AddressIPv4);
     }
     final r = Random();
-    final socket_client =
-        await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final socket_client = await RawDatagramSocket.bind(
+      InternetAddress.anyIPv4,
+      0,
+    );
     _sender = Timer.periodic(Duration(seconds: 3), (Timer t) async {
       final n = r.nextDouble();
       var st = "ssdp:all";
@@ -543,7 +575,8 @@ class DLNAManager {
           st = "urn:schemas-upnp-org:device:MediaRenderer:1";
         }
       }
-      String msg = 'M-SEARCH * HTTP/1.1\r\n' +
+      String msg =
+          'M-SEARCH * HTTP/1.1\r\n' +
           'ST: $st\r\n' +
           'HOST: 239.255.255.250:1900\r\n' +
           'MX: 3\r\n' +
