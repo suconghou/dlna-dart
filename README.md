@@ -30,7 +30,7 @@ main(List<String> args) async {
     print('server closed');
   });
 
-  // if you new search() many times , you must use start(reusePort:true)
+  // if you new DLNAManager() many times , you must use start(reusePort:true)
 }
 
 
