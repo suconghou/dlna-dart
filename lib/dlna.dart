@@ -43,8 +43,12 @@ class DLNADevice {
     'GetVolume',
   ]);
   DateTime activeTime = DateTime.now();
+  final currPosition = StreamController<PositionParser>.broadcast();
 
-  DLNADevice(this.info);
+  late final PositionPoller positionPoller;
+  DLNADevice(this.info) {
+    positionPoller = PositionPoller(this, this.currPosition);
+  }
 
   void updateActive(DateTime t) {
     activeTime = t;
@@ -171,6 +175,57 @@ class DLNADevice {
   Future<String> changeVolume(int value) async {
     final v = VolumeParser(await getVolume()).change(value);
     return await volume(v);
+  }
+
+  void dispose() {
+    currPosition.close();
+    positionPoller.stop();
+  }
+}
+
+class PositionPoller {
+  final DLNADevice _dev;
+  StreamController<PositionParser> position;
+  Timer? _timer;
+  bool _isPolling = false;
+  PositionPoller(this._dev, this.position);
+
+  void start() {
+    if (_isPolling) {
+      return;
+    }
+    _isPolling = true;
+    _fetchPositionPeriodically();
+  }
+
+  void stop() {
+    if (!_isPolling) {
+      return;
+    }
+    _isPolling = false;
+    _timer?.cancel();
+  }
+
+  void _fetchPositionPeriodically() async {
+    // 安全检查：如果轮询已通过 stop() 停止，则立即退出
+    if (!_isPolling) {
+      return;
+    }
+    try {
+      final text = await _dev.position();
+      // 安全检查：在 await 期间，轮询可能已被外部调用 stop() 停止
+      if (!_isPolling) return;
+      // 更新内部状态
+      position.add(PositionParser(text));
+    } catch (e) {
+      // 捕获请求或解析过程中可能发生的异常,2秒后重新开始轮询
+      print("$e. Will try again after 2 seconds.");
+    } finally {
+      // 无论成功或失败，只要轮询标志为 true，就安排下一次调用
+      if (_isPolling) {
+        _timer = Timer(const Duration(seconds: 2), _fetchPositionPeriodically);
+      }
+    }
   }
 }
 
@@ -411,20 +466,16 @@ class XmlText {
 }
 
 class DLNAHttp {
+  static final _client = HttpClient();
   static Future<String> get(Uri uri) async {
-    final client = HttpClient();
-    try {
-      const timeout = Duration(seconds: 15);
-      final req = await client.getUrl(uri);
-      final res = await req.close().timeout(timeout);
-      if (res.statusCode != HttpStatus.ok) {
-        throw Exception("request $uri error , status ${res.statusCode}");
-      }
-      final body = await res.transform(utf8.decoder).join().timeout(timeout);
-      return body;
-    } finally {
-      client.close();
+    const timeout = Duration(seconds: 15);
+    final req = await _client.getUrl(uri);
+    final res = await req.close().timeout(timeout);
+    if (res.statusCode != HttpStatus.ok) {
+      throw Exception("request $uri error , status ${res.statusCode}");
     }
+    final body = await res.transform(utf8.decoder).join().timeout(timeout);
+    return body;
   }
 
   static Future<String> post(
@@ -432,36 +483,31 @@ class DLNAHttp {
     Map<String, Object> headers,
     List<int> data,
   ) async {
-    final client = HttpClient();
-    try {
-      const timeout = Duration(seconds: 15);
-      final req = await client.postUrl(uri);
-      headers.forEach((name, values) {
-        req.headers.set(name, values);
-      });
-      req.contentLength = data.length;
-      req.add(data);
-      final res = await req.close().timeout(timeout);
-      if (res.statusCode != HttpStatus.ok) {
-        final body = await res.transform(utf8.decoder).join().timeout(timeout);
-        throw Exception("request $uri error , status ${res.statusCode} $body");
-      }
+    const timeout = Duration(seconds: 15);
+    final req = await _client.postUrl(uri);
+    headers.forEach((name, values) {
+      req.headers.set(name, values);
+    });
+    req.contentLength = data.length;
+    req.add(data);
+    final res = await req.close().timeout(timeout);
+    if (res.statusCode != HttpStatus.ok) {
       final body = await res.transform(utf8.decoder).join().timeout(timeout);
-      return body;
-    } finally {
-      client.close();
+      throw Exception("request $uri error , status ${res.statusCode} $body");
     }
+    final body = await res.transform(utf8.decoder).join().timeout(timeout);
+    return body;
   }
 }
 
 class _upnp_msg_parser {
   final String message;
   _upnp_msg_parser(this.message);
-  parse() async {
+  Future<DeviceInfo?> parse() async {
     final lines = message.split('\n');
     final arr = lines.first.split(' ');
     if (arr.length < 3) {
-      return;
+      return null;
     }
     final method = arr[0];
     if (method == 'M-SEARCH') {
@@ -474,9 +520,10 @@ class _upnp_msg_parser {
     } else {
       print(message);
     }
+    return null;
   }
 
-  onNotify(List<String> lines) async {
+  Future<DeviceInfo?> onNotify(List<String> lines) async {
     String uri = '';
     lines.forEach((element) {
       final arr = element.split(':');
@@ -490,13 +537,19 @@ class _upnp_msg_parser {
     if (uri != '') {
       return await getInfo(uri);
     }
+    return null;
   }
 
-  Future<DeviceInfo> getInfo(String uri) async {
-    final target = Uri.parse(uri);
-    final body = await DLNAHttp.get(target);
-    final info = DeviceInfoParser(body).parse(target);
-    return info;
+  Future<DeviceInfo?> getInfo(String uri) async {
+    try {
+      final target = Uri.parse(uri);
+      final body = await DLNAHttp.get(target);
+      final info = DeviceInfoParser(body).parse(target);
+      return info;
+    } catch (e) {
+      print(uri + " error: " + e.toString());
+      return null;
+    }
   }
 }
 
@@ -505,6 +558,13 @@ class DeviceManager {
   final Map<String, DLNADevice> deviceList = Map();
   final StreamController<Map<String, DLNADevice>> devices = StreamController();
   DeviceManager();
+  void cleanInactiveDevices(DateTime now) {
+    deviceList.removeWhere((key, device) {
+      final inactiveDuration = now.difference(device.activeTime).inSeconds;
+      return inactiveDuration > 120; // 超过120秒未活跃
+    });
+  }
+
   onMessage(String message) async {
     final DeviceInfo? info = await _upnp_msg_parser(message).parse();
     if (info == null) {
@@ -520,10 +580,15 @@ class DeviceManager {
     final newFound = device == null;
     if (newFound || now.difference(t).inSeconds.abs() > 5) {
       if (!devices.isClosed) {
+        cleanInactiveDevices(now);
         devices.add(deviceList);
         t = now;
       }
     }
+  }
+
+  void dispose() {
+    devices.close();
   }
 }
 
@@ -536,7 +601,7 @@ class DLNAManager {
   StreamSubscription? _clientSubscription;
   StreamSubscription? _serverSubscription;
   int _searchCount = 0;
-  DeviceManager? _deviceManager = DeviceManager();
+  DeviceManager? _deviceManager;
   Future<DeviceManager> start({reusePort = false}) async {
     stop();
     _deviceManager?.devices.close();
@@ -649,6 +714,6 @@ class DLNAManager {
     _serverSubscription?.cancel();
     _socket_server?.close();
     _socket_server = null;
-    _deviceManager?.devices.close();
+    _deviceManager?.dispose();
   }
 }
