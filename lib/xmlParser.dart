@@ -1,7 +1,66 @@
 import 'package:xml/xml.dart';
 import 'dart:math';
 
-enum PlayType { Video, Image, Audio }
+abstract class PlayType {
+  String get protocolInfo;
+}
+
+enum MediaMime implements PlayType {
+  none('');
+
+  @override
+  final String protocolInfo;
+  const MediaMime(this.protocolInfo);
+}
+
+enum VideoMime implements PlayType {
+  mpeg('http-get:*:video/mpeg:*'),
+  mp4('http-get:*:video/mp4:*'),
+  xMatroska('http-get:*:video/x-matroska:*'), // MKV
+  quicktime('http-get:*:video/quicktime:*'), // MOV
+  xMsWmv('http-get:*:video/x-ms-wmv:*'), // WMV
+  avi('http-get:*:video/avi:*'), // AVI
+  flv('http-get:*:video/flv:*'),
+  ts('http-get:*:video/mp2t:*'), // TS
+
+  // 流媒体播放列表
+  hls('http-get:*:application/vnd.apple.mpegurl:*'), // 标准的HLS MIME Type
+
+  any('http-get:*:*:*');
+
+  @override
+  final String protocolInfo;
+  const VideoMime(this.protocolInfo);
+}
+
+enum AudioMime implements PlayType {
+  mp3('http-get:*:audio/mp3:*'),
+  mp4('http-get:*:audio/mp4:*'),
+  mpeg('http-get:*:audio/mpeg:*'),
+  xFlac('http-get:*:audio/x-flac:*'),
+  mpegurl('http-get:*:audio/mpegurl:*'),
+  wav('http-get:*:audio/wav:*'),
+  wma('http-get:*:audio/wma:*'),
+  xMatroska('http-get:*:audio/x-matroska:*'),
+  xApe('http-get:*:audio/x-ape:*'),
+  any('http-get:*:*:*');
+
+  @override
+  final String protocolInfo;
+  const AudioMime(this.protocolInfo);
+}
+
+enum ImageMime implements PlayType {
+  jpeg('http-get:*:image/jpeg:*'),
+  png('http-get:*:image/png:*'),
+  tiff('http-get:*:image/tiff:*'),
+  gif('http-get:*:image/gif:*'),
+  any('http-get:*:*:*');
+
+  @override
+  final String protocolInfo;
+  const ImageMime(this.protocolInfo);
+}
 
 extension XmlExtension on XmlNode {
   String tagVal(String name) {

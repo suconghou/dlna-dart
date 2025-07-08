@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'xmlParser.dart';
@@ -77,7 +76,7 @@ class DLNADevice {
   Future<String> setUrl(
     String url, {
     String title = "",
-    PlayType type = PlayType.Video,
+    PlayType type = VideoMime.any,
   }) {
     final data = XmlText.setPlayURLXml(url, title: title, type: type);
     return request('SetAVTransportURI', Utf8Encoder().convert(data));
@@ -181,6 +180,9 @@ class XmlText {
     String title = "",
     required PlayType type,
   }) {
+    final time = DateTime.fromMillisecondsSinceEpoch(
+      DateTime.now().millisecondsSinceEpoch,
+    );
     final douyu = RegExp(r'^https?://(\d+)\?douyu$');
     final isdouyu = douyu.firstMatch(url);
     if (isdouyu != null) {
@@ -190,27 +192,29 @@ class XmlText {
     } else if (title.isEmpty) {
       title = url;
     }
-    var meta = '';
-    if (type == PlayType.Video) {
-      meta =
-          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.videoItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
-    } else if (type == PlayType.Image) {
-      meta =
-          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.imageItem</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
-    } else if (type == PlayType.Audio) {
-      meta =
-          '''<DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sec="http://www.sec.co.kr/"><item id="false" parentID="1" restricted="0"><dc:title>$title</dc:title><dc:creator>unkown</dc:creator><upnp:class>object.item.audioItem.musicTrack</upnp:class><res resolution="4"></res></item></DIDL-Lite>''';
-    }
-
-    meta = htmlEncode(meta);
+    title = htmlEncode(title);
     url = htmlEncode(url);
+    var oclass = 'object.item.videoItem';
+    var res = '';
+    if (type is AudioMime) {
+      oclass = 'object.item.audioItem';
+    } else if (type is ImageMime) {
+      oclass = 'object.item.imageItem';
+    }
+    if (type.protocolInfo.isNotEmpty) {
+      res = '<res protocolInfo="${type.protocolInfo}">$url</res>';
+    }
     return '''<?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/" s:encodingStyle="http://schemas.xmlsoap.org/soap/encoding/">
     <s:Body>
         <u:SetAVTransportURI xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
             <InstanceID>0</InstanceID>
             <CurrentURI>$url</CurrentURI>
-            <CurrentURIMetaData>$meta</CurrentURIMetaData>
+            <CurrentURIMetaData>
+              <DIDL-Lite xmlns="urn:schemas-upnp-org:metadata-1-0/DIDL-Lite/" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:upnp="urn:schemas-upnp-org:metadata-1-0/upnp/" xmlns:dlna="urn:schemas-dlna-org:metadata-1-0/">
+                <item id="id" parentID="0" restricted="0"><dc:title>$title</dc:title><upnp:artist>unknow</upnp:artist><dc:date>$time</dc:date><upnp:class>$oclass</upnp:class>$res</item>
+              </DIDL-Lite>
+            </CurrentURIMetaData>
         </u:SetAVTransportURI>
     </s:Body>
 </s:Envelope>
@@ -528,8 +532,10 @@ class DLNAManager {
   static const int UPNP_PORT = 1900;
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
   Timer _sender = Timer(Duration(seconds: 2), () {});
-  Timer _receiver = Timer(Duration(seconds: 2), () {});
   RawDatagramSocket? _socket_server;
+  StreamSubscription? _clientSubscription;
+  StreamSubscription? _serverSubscription;
+  int _searchCount = 0;
   DeviceManager? _deviceManager = DeviceManager();
   Future<DeviceManager> start({reusePort = false}) async {
     stop();
@@ -560,58 +566,87 @@ class DLNAManager {
     } else {
       _socket_server!.joinMulticast(UPNP_AddressIPv4);
     }
-    final r = Random();
     final socket_client = await RawDatagramSocket.bind(
       InternetAddress.anyIPv4,
       0,
     );
-    _sender = Timer.periodic(Duration(seconds: 3), (Timer t) async {
-      final n = r.nextDouble();
-      var st = "ssdp:all";
-      if (n > 0.3) {
-        if (n > 0.6) {
-          st = "urn:schemas-upnp-org:service:AVTransport:1";
-        } else {
-          st = "urn:schemas-upnp-org:device:MediaRenderer:1";
+
+    _clientSubscription = socket_client.listen((RawSocketEvent event) {
+      if (event == RawSocketEvent.read) {
+        while (true) {
+          final datagram = socket_client.receive();
+          if (datagram == null) break;
+
+          try {
+            String message = String.fromCharCodes(datagram.data).trim();
+            dm.onMessage(message);
+          } catch (e) {
+            print(e);
+          }
         }
       }
-      String msg =
-          'M-SEARCH * HTTP/1.1\r\n' +
-          'ST: $st\r\n' +
-          'HOST: 239.255.255.250:1900\r\n' +
-          'MX: 3\r\n' +
-          'MAN: \"ssdp:discover\"\r\n\r\n';
-      socket_client.send(msg.codeUnits, UPNP_AddressIPv4, UPNP_PORT);
-      final replay = socket_client.receive();
-      if (replay == null) {
-        return;
-      }
-      try {
-        String message = String.fromCharCodes(replay.data).trim();
-        await dm.onMessage(message);
-      } catch (e) {
-        print(e);
+    });
+
+    _serverSubscription = _socket_server?.listen((RawSocketEvent event) {
+      if (event == RawSocketEvent.read) {
+        while (true) {
+          final datagram = _socket_server?.receive();
+          if (datagram == null) break;
+
+          try {
+            String message = String.fromCharCodes(datagram.data).trim();
+            // print('Datagram from ${d.address.address}:${d.port}: ${message}');
+            dm.onMessage(message);
+          } catch (e) {
+            print(e);
+          }
+        }
       }
     });
-    _receiver = Timer.periodic(Duration(seconds: 2), (Timer t) async {
-      final d = _socket_server!.receive();
-      if (d == null) {
-        return;
-      }
-      String message = String.fromCharCodes(d.data).trim();
-      // print('Datagram from ${d.address.address}:${d.port}: ${message}');
-      try {
-        await dm.onMessage(message);
-      } catch (e) {
-        print(e);
-      }
+
+    _sendSearchRequest(socket_client);
+    _sender = Timer.periodic(Duration(seconds: 2), (Timer t) async {
+      _sendSearchRequest(socket_client);
     });
     return dm;
   }
 
+  Future<void> _sendSearchRequest(RawDatagramSocket socket) async {
+    List<String> stList;
+    if (_searchCount == 0) {
+      stList = [
+        "ssdp:all",
+        "urn:schemas-upnp-org:device:MediaRenderer:1",
+        "urn:schemas-upnp-org:service:AVTransport:1",
+      ];
+    } else if (_searchCount % 5 == 0) {
+      stList = ["ssdp:all"];
+    } else if (_searchCount % 5 == 1 || _searchCount % 5 == 3) {
+      stList = ["urn:schemas-upnp-org:device:MediaRenderer:1"];
+    } else {
+      stList = ["urn:schemas-upnp-org:service:AVTransport:1"];
+    }
+
+    for (int i = 0; i < stList.length; i++) {
+      final st = stList[i];
+      String msg =
+          'M-SEARCH * HTTP/1.1\r\n' +
+          'HOST: 239.255.255.250:1900\r\n' +
+          'ST: $st\r\n' +
+          'MX: ${_searchCount == 0 ? 1 : 3}\r\n' +
+          'MAN: \"ssdp:discover\"\r\n\r\n';
+      socket.send(msg.codeUnits, UPNP_AddressIPv4, UPNP_PORT);
+      if (i < stList.length - 1) {
+        await Future.delayed(Duration(milliseconds: 30));
+      }
+    }
+    _searchCount++;
+  }
+
   stop() {
     _sender.cancel();
-    _receiver.cancel();
+    _clientSubscription?.cancel();
+    _serverSubscription?.cancel();
     _socket_server?.close();
     _socket_server = null;
     _deviceManager?.devices.close();
