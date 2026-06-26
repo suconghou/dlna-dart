@@ -598,6 +598,7 @@ class DLNAManager {
   final InternetAddress UPNP_AddressIPv4 = InternetAddress(UPNP_IP_V4);
   Timer _sender = Timer(Duration(seconds: 2), () {});
   RawDatagramSocket? _socket_server;
+  RawDatagramSocket? _socket_client;
   StreamSubscription? _clientSubscription;
   StreamSubscription? _serverSubscription;
   int _searchCount = 0;
@@ -631,12 +632,10 @@ class DLNAManager {
     } else {
       _socket_server!.joinMulticast(UPNP_AddressIPv4);
     }
-    final socket_client = await RawDatagramSocket.bind(
-      InternetAddress.anyIPv4,
-      0,
-    );
+    _socket_client = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+    final socket_client = _socket_client!;
 
-    _clientSubscription = socket_client.listen((RawSocketEvent event) {
+    _clientSubscription = _socket_client?.listen((RawSocketEvent event) {
       if (event == RawSocketEvent.read) {
         while (true) {
           final datagram = socket_client.receive();
@@ -693,6 +692,9 @@ class DLNAManager {
     }
 
     for (int i = 0; i < stList.length; i++) {
+      if (!identical(_socket_client, socket)) {
+        return;
+      }
       final st = stList[i];
       String msg =
           'M-SEARCH * HTTP/1.1\r\n' +
@@ -711,7 +713,11 @@ class DLNAManager {
   stop() {
     _sender.cancel();
     _clientSubscription?.cancel();
+    _clientSubscription = null;
     _serverSubscription?.cancel();
+    _serverSubscription = null;
+    _socket_client?.close();
+    _socket_client = null;
     _socket_server?.close();
     _socket_server = null;
     _deviceManager?.dispose();
