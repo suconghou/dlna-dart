@@ -8,5 +8,6 @@
 ## [0.0.8] - add play type param in set play url
 ## [0.0.9] - add device active time , update dependencies （deprecated）
 ## [0.1.0] - downgrade dependencies
+## [0.1.1] - close SSDP client socket on stop
 
 
