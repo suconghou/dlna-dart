@@ -1,5 +1,4 @@
 import 'package:xml/xml.dart';
-import 'dart:math';
 
 abstract class PlayType {
   String get protocolInfo;
@@ -16,16 +15,13 @@ enum MediaMime implements PlayType {
 enum VideoMime implements PlayType {
   mpeg('http-get:*:video/mpeg:*'),
   mp4('http-get:*:video/mp4:*'),
-  xMatroska('http-get:*:video/x-matroska:*'), // MKV
-  quicktime('http-get:*:video/quicktime:*'), // MOV
-  xMsWmv('http-get:*:video/x-ms-wmv:*'), // WMV
-  avi('http-get:*:video/avi:*'), // AVI
+  xMatroska('http-get:*:video/x-matroska:*'),
+  quicktime('http-get:*:video/quicktime:*'),
+  xMsWmv('http-get:*:video/x-ms-wmv:*'),
+  avi('http-get:*:video/avi:*'),
   flv('http-get:*:video/flv:*'),
-  ts('http-get:*:video/mp2t:*'), // TS
-
-  // 流媒体播放列表
-  hls('http-get:*:application/vnd.apple.mpegurl:*'), // 标准的HLS MIME Type
-
+  ts('http-get:*:video/mp2t:*'),
+  hls('http-get:*:application/vnd.apple.mpegurl:*'),
   any('http-get:*:*:*');
 
   @override
@@ -64,7 +60,8 @@ enum ImageMime implements PlayType {
 
 extension XmlExtension on XmlNode {
   String tagVal(String name) {
-    return this.findAllElements(name).first.innerText;
+    final els = findAllElements(name);
+    return els.isEmpty ? '' : els.first.innerText;
   }
 }
 
@@ -82,93 +79,54 @@ class DeviceInfo {
 }
 
 class PositionParser {
-  String TrackDuration = "00:00:00"; // 总时长
-  String TrackURI = "";
-  String RelTime = "00:00:00"; // 当前播放时间点
-  String AbsTime = "00:00:00";
+  String TrackDuration = '00:00:00';
+  String TrackURI = '';
+  String RelTime = '00:00:00';
+  String AbsTime = '00:00:00';
 
-  int get TrackDurationInt {
-    return toInt(TrackDuration);
-  }
-
-  int get RelTimeInt {
-    return toInt(RelTime);
-  }
+  int get TrackDurationInt => toInt(TrackDuration);
+  int get RelTimeInt => toInt(RelTime);
 
   PositionParser(String text) {
-    if (text.isEmpty) {
-      return;
-    }
+    if (text.isEmpty) return;
     final doc = XmlDocument.parse(text);
     final duration = doc.tagVal('TrackDuration');
     final rel = doc.tagVal('RelTime');
     final abs = doc.tagVal('AbsTime');
-    if (duration.isNotEmpty) {
-      TrackDuration = duration;
-    }
-    if (rel.isNotEmpty) {
-      RelTime = rel;
-    }
-    if (abs.isNotEmpty) {
-      AbsTime = abs;
-    }
+    if (duration.isNotEmpty) TrackDuration = duration;
+    if (rel.isNotEmpty) RelTime = rel;
+    if (abs.isNotEmpty) AbsTime = abs;
     TrackURI = doc.tagVal('TrackURI');
   }
 
-  String seek(int n) {
-    final total = TrackDurationInt;
-    var x = RelTimeInt + n;
-    if (x > total) {
-      x = total;
-    } else if (x < 0) {
-      x = 0;
-    }
-    return toStr(x);
-  }
+  String seek(int n) => toStr((RelTimeInt + n).clamp(0, TrackDurationInt));
 
   static int toInt(String str) {
-    final arr = str.split(':');
     var sum = 0;
-    for (var i = 0; i < arr.length; i++) {
-      sum += int.parse(arr[i]) * (pow(60, arr.length - i - 1) as int);
+    for (final part in str.split(':')) {
+      sum = sum * 60 + (int.tryParse(part) ?? 0);
     }
     return sum;
   }
 
   static String toStr(int time) {
-    final h = (time / 3600).floor();
-    final m = ((time - 3600 * h) / 60).floor();
-    final s = time - 3600 * h - 60 * m;
-    final str = "${z(h)}:${z(m)}:${z(s)}";
-    return str;
+    final h = time ~/ 3600;
+    final m = (time % 3600) ~/ 60;
+    final s = time % 60;
+    return '${z(h)}:${z(m)}:${z(s)}';
   }
 
-  static String z(int n) {
-    if (n > 9) {
-      return n.toString();
-    }
-    return "0$n";
-  }
+  static String z(int n) => n > 9 ? '$n' : '0$n';
 }
 
 class VolumeParser {
   int current = 0;
   VolumeParser(String text) {
     final doc = XmlDocument.parse(text);
-    String v = doc.tagVal('CurrentVolume');
-    current = int.parse(v);
+    current = int.tryParse(doc.tagVal('CurrentVolume')) ?? 0;
   }
 
-  int change(int v) {
-    int target = current + v;
-    if (target > 100) {
-      target = 100;
-    }
-    if (target < 0) {
-      target = 0;
-    }
-    return target;
-  }
+  int change(int v) => (current + v).clamp(0, 100);
 }
 
 class TransportInfoParser {
@@ -186,13 +144,12 @@ class MediaInfoParser {
   String CurrentURI = '';
   String NextURI = '';
 
-  int get MediaDurationInt {
-    return PositionParser.toInt(MediaDuration);
-  }
+  int get MediaDurationInt => PositionParser.toInt(MediaDuration);
 
   MediaInfoParser(String text) {
     final doc = XmlDocument.parse(text);
-    MediaDuration = doc.tagVal('MediaDuration');
+    final duration = doc.tagVal('MediaDuration');
+    if (duration.isNotEmpty) MediaDuration = duration;
     CurrentURI = doc.tagVal('CurrentURI');
     NextURI = doc.tagVal('NextURI');
   }
@@ -202,30 +159,75 @@ class DeviceInfoParser {
   final String text;
   final XmlDocument doc;
   DeviceInfoParser(this.text) : doc = XmlDocument.parse(text);
+
   DeviceInfo parse(Uri uri) {
-    String URLBase = "";
-    try {
-      URLBase = doc.tagVal('URLBase');
-    } catch (e) {
-      URLBase = uri.origin;
+    var URLBase = doc.tagVal('URLBase').trim();
+    if (URLBase.isEmpty) {
+      URLBase = _urlBaseFromLocation(uri);
     }
-    final deviceType = doc.tagVal('deviceType');
-    final friendlyName = doc.tagVal('friendlyName');
-    final serviceList = doc
-        .findAllElements('serviceList')
-        .first
-        .findAllElements('service');
-    final serviceListItems = [];
-    for (final service in serviceList) {
-      final serviceType = service.tagVal('serviceType');
-      final serviceId = service.tagVal('serviceId');
-      final controlURL = service.tagVal('controlURL');
-      serviceListItems.add({
-        "serviceType": serviceType,
-        "serviceId": serviceId,
-        "controlURL": controlURL,
-      });
+    final device = _pickDevice();
+    return DeviceInfo(
+      URLBase,
+      _directText(device, 'deviceType'),
+      _directText(device, 'friendlyName'),
+      _services(device),
+    );
+  }
+
+  XmlElement _pickDevice() {
+    final devices = doc.findAllElements('device');
+    XmlElement? fallback;
+    XmlElement? withAv;
+    for (final d in devices) {
+      fallback ??= d;
+      if (_directText(d, 'deviceType').contains('MediaRenderer')) return d;
+      if (withAv == null && _hasAv(d)) withAv = d;
     }
-    return DeviceInfo(URLBase, deviceType, friendlyName, serviceListItems);
+    final picked = withAv ?? fallback;
+    if (picked == null) throw Exception('no device in description');
+    return picked;
+  }
+
+  bool _hasAv(XmlElement device) {
+    for (final sl in device.findElements('serviceList')) {
+      for (final service in sl.findElements('service')) {
+        if (_directText(service, 'serviceType').contains('AVTransport') ||
+            _directText(service, 'serviceId').contains('AVTransport')) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  List<Map<String, String>> _services(XmlElement device) {
+    final items = <Map<String, String>>[];
+    for (final sl in device.findElements('serviceList')) {
+      for (final service in sl.findElements('service')) {
+        items.add({
+          'serviceType': _directText(service, 'serviceType'),
+          'serviceId': _directText(service, 'serviceId'),
+          'controlURL': _directText(service, 'controlURL'),
+        });
+      }
+    }
+    return items;
+  }
+
+  static String _directText(XmlElement e, String name) {
+    for (final c in e.findElements(name)) {
+      return c.innerText;
+    }
+    return '';
+  }
+
+  static String _urlBaseFromLocation(Uri uri) {
+    var path = uri.path;
+    if (path.isEmpty || path == '/') return uri.origin;
+    if (!path.endsWith('/')) {
+      final i = path.lastIndexOf('/');
+      path = i <= 0 ? '/' : path.substring(0, i + 1);
+    }
+    return uri.origin + path;
   }
 }
